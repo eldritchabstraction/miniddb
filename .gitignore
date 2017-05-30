@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# vagrant
+.vagrant
+
+# misc
+*.log
