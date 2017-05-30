@@ -42,3 +42,5 @@
 .project
 .settings
 
+# cmake
+build
