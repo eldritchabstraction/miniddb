@@ -36,3 +36,9 @@
 
 # misc
 *.log
+
+# eclipse
+.cproject
+.project
+.settings
+
