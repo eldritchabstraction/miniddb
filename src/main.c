@@ -1,15 +1,26 @@
 #include <stdio.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <stdlib.h>
 #include <ev.h>
+#include <unistd.h>
 
-#define LISTEN_PORT 3033
+#define LISTEN_PORT 5555
 #define BUFFER_SIZE 1024
+#define STDIN_FILE_NUMBER 0
+
 
 int total_clients = 0;  // Total number of connected clients
 
+const char *g_servers[2] = { "10.0.0.2", "10.0.0.3" };
+#define SERVER_COUNT 2
+
+int g_the_variable = 0;
+
+
 void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
 void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
+void stdin_cb (struct ev_loop *loop, ev_io *w, int revents);
 
 int main()
 {
@@ -17,6 +28,7 @@ int main()
     int listen_socket_fd;
     struct sockaddr_in listen_socket;
     struct ev_io w_accept;
+    struct ev_io w_stdin;
 
     // Create listen socket
     if( (listen_socket_fd = socket(PF_INET, SOCK_STREAM, 0)) < 0 )
@@ -48,6 +60,10 @@ int main()
     ev_io_init(&w_accept, accept_cb, listen_socket_fd, EV_READ);
     ev_io_start(loop, &w_accept);
 
+    // Initialize and start a watcher to accept stdio
+    ev_io_init(&w_stdin, stdin_cb, STDIN_FILE_NUMBER, EV_READ);
+    ev_io_start(loop, &w_stdin);
+
     // Start infinite loop
     while (1)
     {
@@ -63,6 +79,7 @@ void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents)
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
     int client_socket_fd;
+    char buffer[1024];
     struct ev_io *w_client = (struct ev_io*) malloc (sizeof(struct ev_io));
 
     if(EV_ERROR & revents)
@@ -81,7 +98,8 @@ void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents)
     }
 
     total_clients++; // Increment total_clients count
-    printf("Successfully connected with client.\n");
+    inet_ntop(AF_INET, &(client_addr.sin_addr), buffer, sizeof(buffer));
+    printf("Successfully connected with client %s:%d.\n", buffer, client_addr.sin_port);
     printf("%d client(s) connected.\n", total_clients);
 
     // Initialize and start watcher to rc client requests
@@ -119,6 +137,72 @@ void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents){
     }
     else
     {
-        printf("message:%s\n",buffer);
+        // printf("message:%s\n",buffer);
+        // instead of printing a message, how about we set a variable?
+
+        char *endptr;
+        int temp = 0;
+
+        if ((temp = strtol(buffer, &endptr, 10)) < 0)
+        {
+            perror("strtol error");
+            return;
+        }
+
+        g_the_variable = temp;
+        printf("The variable is currently %d\n", g_the_variable);
+    }
+}
+
+int send_to_peer(const char* address, int port, const char *buffer)
+{
+    int send_socket_fd = -1;
+    struct sockaddr_in server;
+
+    if ((send_socket_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    {
+        perror("socket error");
+        return -1;
+    }
+
+    server.sin_addr.s_addr = inet_addr(address);
+    server.sin_family = AF_INET;
+    server.sin_port = htons(port);
+
+    if (connect(send_socket_fd, (struct sockaddr *)&server , sizeof(server)) < 0)
+    {
+        perror("connect failed. Error");
+        return -1;
+    }
+
+    if( send(send_socket_fd, buffer, strlen(buffer) + 1, 0) < 0)
+    {
+        printf("Send failed");
+        return -1;
+    }
+
+    return 0;
+}
+
+void stdin_cb (struct ev_loop *loop, ev_io *w, int revents)
+{
+    char buffer[1024];
+
+    memset(buffer, 0, sizeof(buffer));
+
+    if (read(0, buffer, sizeof(buffer)) < 0)
+    {
+        printf("Error: on read\n");
+        // all nested ev_runs stop iterating
+        ev_break(loop, EVBREAK_ALL);
+    }
+
+    // instead of printing the buffer, initiate a connection to all peers and
+    // send the message across
+
+    for (int i = 0; i < SERVER_COUNT; ++i)
+    {
+        if (send_to_peer(g_servers[i], 5555, buffer) < 0)
+            return;
     }
 }
