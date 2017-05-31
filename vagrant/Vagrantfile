@@ -21,6 +21,18 @@ Vagrant.configure("2") do |config|
     b.vm.hostname = "b"
     b.vm.network :private_network, ip: "10.0.0.3"
   end
+
+  config.vm.define "d" do |d|
+    d.vm.box = "ubuntu/xenial64"
+    d.vm.hostname = "d"
+    d.vm.network :private_network, ip: "10.0.0.4"
+  end
+
+  config.vm.define "e" do |e|
+    e.vm.box = "ubuntu/xenial64"
+    e.vm.hostname = "e"
+    e.vm.network :private_network, ip: "10.0.0.5"
+  end
   # Disable automatic box update checking. If you disable this, then
   # boxes will only be checked for updates when the user runs
   # `vagrant box outdated`. This is not recommended.
